@@ -29,7 +29,12 @@
 #include <exception>
 #include <stdexcept>
 #include <pqxx/pqxx> 
+#include <libxml/parser.h>
+#include <libxml/tree.h>
 
+
+
+#include "db_operator.h"
 
 #define BUFFER_SIZE 409600
 #define THREAD_NUM 1
@@ -37,7 +42,7 @@
 
 using namespace pqxx;
 using namespace std;
-
+DBOperator db;
 class Server{
 
 public:
@@ -61,7 +66,7 @@ struct addrinfo * Server::connect_socket(){
     const char* hostname=NULL;
     struct addrinfo host_info;
     struct addrinfo *host_info_list;
-    const char *port     = "12346";
+    const char *port     = "12320";
     memset(&host_info, 0, sizeof(host_info));
     host_info.ai_family   = AF_INET;
     host_info.ai_socktype = SOCK_STREAM;
@@ -124,6 +129,100 @@ int recv_end(std::vector <char>& buffer, size_t recv_size){
 
   return 0;
 }
+
+
+void paserRoot(std::string raw_xml){
+  xmlDocPtr pdoc = NULL;
+  xmlNodePtr proot = NULL;
+  xmlKeepBlanksDefault(0);
+  string xmlString = raw_xml;
+  pdoc = xmlParseMemory((const char *)xmlString.c_str(), xmlString.size());
+  if (pdoc == NULL)
+    {
+      perror("error:can't open file!\n");
+      return;
+    }
+  //get the root element
+  proot = xmlDocGetRootElement(pdoc);
+  if (proot == NULL){
+    perror("error: file is empty!\n");
+    return;
+  }
+
+  if(!xmlStrcmp(proot->name, BAD_CAST("create"))){
+    xmlNodePtr pcur = NULL;
+    //call create handler
+    pcur = proot->xmlChildrenNode;
+    while (pcur != NULL){
+        if (!xmlStrcmp(pcur->name, BAD_CAST("account"))){
+          map<string, string> account_map;
+          xmlAttr * attr = pcur->properties;
+          while(attr){				
+            //printf("\t%s=%s\n",attr->name,attr->children->content);
+            string key = (char *) attr->name;
+            string value = (char *) attr->children->content;
+            account_map.insert(pair<string, string>(key, value));  
+            attr = attr->next;
+          }
+          if(account_map.size()!=2){
+            error_handler("Wrong attribute number");//////////////////////////////////////////////////////
+          }
+          map<string, string>::iterator it;
+          it = account_map.find("id");
+          string id = "";
+          string balance = "";
+          if(it != account_map.end()){
+            id = it -> second;
+          }
+          else{
+            error_handler("No id");//////////////////////////////////////////////////////////////////////
+          }
+          it = account_map.find("balance");
+          if(it != account_map.end()){
+            balance = it -> second;
+          }
+          else{
+            error_handler("No balance");/////////////////////////////////////////////////////////////////
+          }
+          //handle_create(id, balance);
+        }
+        pcur = pcur->next;
+    }
+  }
+  if(!xmlStrcmp(proot->name, BAD_CAST("transactions"))){
+    cout<< "this is transactions"<<endl;
+
+    //call transaction handler
+
+  }
+  //release resource
+  xmlFreeDoc(pdoc);
+  xmlCleanupParser();
+  xmlMemoryDump();
+  return;
+}
+
+string error_handler(string type, int id, string sym){
+  std::string result;
+  std::string account1 = "<error id=' " +std::to_string(id)+"' >";
+  std::string sym1 = "<error sym='" + sym + "' " + "id=' " +std::to_string(id)+"' >";
+  std::string end = "</error>";
+  if(type.compare("account")==0){
+    result=account1+"account create error"+end; 
+    return result;
+  }
+  if(type.compare("sym_create")==0){
+    result = sym1+"symbol create error"+end;
+    return result;
+  }
+  if(type.compare("sym_attribute")==0){
+    result = sym1+"symbol attribute error"+end;
+    return result;
+  }
+  return result;
+}
+
+
 //receive request
 
 void Server::receiveRequest(int client_fd, std::vector <char>& buffer){
@@ -157,8 +256,18 @@ void Server::receiveRequest(int client_fd, std::vector <char>& buffer){
     std::cerr<<"bad_alloc exception"<<std::endl;
   }
   std::cout<<"Received: "<<std::endl;
-  std::cout<<buffer[0]<<buffer[1]<<buffer[2]<<std::endl;
+  std::cout<<buffer.data()<<std::endl;
+
+  std::string raw_xml(buffer.begin(), buffer.end());
+
+  int pos = raw_xml.find("<");
+  std::string xml = raw_xml.substr(pos);
+  cout<< "paser xml is " <<endl;
+  cout<< xml <<endl;
+  paserRoot(xml);
+
 }
+
 
 void helper(int client_fd, Server server, std::vector <char>& buffer){
 
@@ -186,12 +295,14 @@ return;
 }
 /* Create SQL statement */
 sql = "CREATE TABLE account(account_id serial PRIMARY KEY, balance INT, SYM1 CHAR(50) );";
-				      
 
-/* Create a transactional object. */
+ std::string drop_table = "DROP TABLE IF EXISTS account;";
+
 work W(C);
 
-/* Execute SQL query */
+
+//W.exec(drop_table);
+ W.exec( drop_table );
 W.exec( sql );
 W.commit();
 cout << "Table created successfully" << endl;
@@ -214,8 +325,8 @@ return;
 
 int main(){
 
-
-  init_db();
+  DBOperator db;
+  db.init_db();
   Server server;
   struct addrinfo * addrinfo = server.connect_socket();
   size_t server_fd = server.server_fd;

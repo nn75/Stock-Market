@@ -3,12 +3,13 @@
 <bookstore>
  
 <book>
-<title lang="eng">Harry Potter</title>
+<title id="1" balance="10000">Harry Potter</title>
 <price>29.99</price>
 </book>
  
 <book>
 <title lang="eng">Learning XML</title>
+<title lang="eng">Fuck XML</title>
 <price>39.95</price>
 </book>
  

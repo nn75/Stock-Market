@@ -11,7 +11,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
-
+#include <thread>
 using namespace std;
 
 string read_file(char * argv){
@@ -28,14 +28,14 @@ void client_connect(string &xml_input){
   int len = xml_input.length();
   string xml_length = to_string(len);
   string xml_context = xml_length + "\n" + xml_input;
-  std::cout << xml_context << std::endl; 
+  std::cout << xml_context << std::endl;
 
   int status;
   int socket_fd;
   struct addrinfo host_info;
   struct addrinfo *host_info_list;
-  const char *hostname = "vcm-8131.vm.duke.edu";
-  const char* port_num = "12346";
+  const char *hostname = "vcm-8252.vm.duke.edu";
+  const char* port_num = "12320";
 
   memset(&host_info, 0, sizeof(host_info));
   host_info.ai_family   = AF_UNSPEC;
@@ -61,19 +61,29 @@ void client_connect(string &xml_input){
     exit(EXIT_FAILURE);
   }
   std::cout<<"connect to server successfully"<<std::endl;
-  
+
 
 
   //const char * test = "test";
   if(send(socket_fd, xml_context.c_str(), xml_context.length(), 0)==-1){
     std::cout<<"error send"<<std::endl;
   }
-  
+
+}
+
+void helper(char * filename){
+  string xml_input = read_file(filename);
+  client_connect(xml_input);
+
 }
 
 int main(int argc, char *argv[]){
-  string xml_input = read_file(argv[1]);
-  client_connect(xml_input);
+  //string xml_input = read_file(argv[1]);
+  //client_connect(xml_input);
+
+ 
+  std::thread th(helper, argv[1]);
+  th.detach();
   while(1){}
   return EXIT_SUCCESS;
 }
