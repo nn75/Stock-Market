@@ -25,98 +25,99 @@
 #include <vector>
 #include <sstream>
 #include <thread>
+#include <pthread.h>
 #include <exception>
 #include <stdexcept>
-#include <pqxx/pqxx>
+#include <pqxx/pqxx> 
+
 
 #define BUFFER_SIZE 409600
 #define THREAD_NUM 1
 
+
 using namespace pqxx;
 using namespace std;
 
-class Server
-{
+class Server{
 
 public:
   int server_fd;
 
-  struct addrinfo *connect_socket();
-  void close_connect(int webserver_fd, struct addrinfo *host_info_list);
-  void receiveRequest(int client_fd, std::vector<char> &buffer);
+
+  struct addrinfo * connect_socket();
+  void close_connect(int webserver_fd,struct addrinfo*host_info_list);
+  void receiveRequest(int client_fd, std::vector <char>& buffer);
+
+
+
 };
 
-struct addrinfo *Server::connect_socket()
-{
-  //BEGIN_REF - TCP Example by by Brian Rogers, updated by Rabih Younes in ECE650
-  int status;
-  const char *hostname = NULL;
-  struct addrinfo host_info;
-  struct addrinfo *host_info_list;
-  const char *port = "12346";
-  memset(&host_info, 0, sizeof(host_info));
-  host_info.ai_family = AF_INET;
-  host_info.ai_socktype = SOCK_STREAM;
-  host_info.ai_flags = AI_PASSIVE;
-  status = getaddrinfo(hostname, port, &host_info, &host_info_list);
-  if (status != 0)
-  {
-    std::cerr << "Error: cannot get address info for host" << std::endl;
-    std::cerr << "  (" << hostname << "," << port << ")" << std::endl;
-    exit(EXIT_FAILURE);
+
+
+
+struct addrinfo * Server::connect_socket(){
+    //BEGIN_REF - TCP Example by by Brian Rogers, updated by Rabih Younes in ECE650
+    int status;
+    const char* hostname=NULL;
+    struct addrinfo host_info;
+    struct addrinfo *host_info_list;
+    const char *port     = "12346";
+    memset(&host_info, 0, sizeof(host_info));
+    host_info.ai_family   = AF_INET;
+    host_info.ai_socktype = SOCK_STREAM;
+    host_info.ai_flags    = AI_PASSIVE;
+    status = getaddrinfo(hostname, port, &host_info, &host_info_list);
+    if (status != 0) {
+      std::cerr << "Error: cannot get address info for host" << std::endl;
+      std::cerr << "  (" << hostname << "," << port << ")" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    server_fd = socket(host_info_list->ai_family,
+		      host_info_list->ai_socktype,
+		      host_info_list->ai_protocol);
+    if (server_fd == -1) {
+      std::cerr << "Error: cannot create socket" << std::endl;
+      std::cerr << "  (" << hostname << "," << port << ")" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    int yes = 1;
+    status = setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+    status = bind(server_fd, host_info_list->ai_addr, host_info_list->ai_addrlen);
+    if (status == -1) {
+      std::cerr << "Error: cannot bind socket" << std::endl;
+      std::cerr << "  (" << hostname << "," << port << ")" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    status = listen(server_fd, 100);
+    if (status == -1) {
+      std::cerr << "Error: cannot listen on socket" << std::endl;
+      std::cerr << "  (" << hostname << "," << port << ")" << std::endl;
+      exit(EXIT_FAILURE);
+    }
+    //END_REF
+    return host_info_list;
   }
-  server_fd = socket(host_info_list->ai_family,
-                     host_info_list->ai_socktype,
-                     host_info_list->ai_protocol);
-  if (server_fd == -1)
-  {
-    std::cerr << "Error: cannot create socket" << std::endl;
-    std::cerr << "  (" << hostname << "," << port << ")" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  int yes = 1;
-  status = setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
-  status = bind(server_fd, host_info_list->ai_addr, host_info_list->ai_addrlen);
-  if (status == -1)
-  {
-    std::cerr << "Error: cannot bind socket" << std::endl;
-    std::cerr << "  (" << hostname << "," << port << ")" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  status = listen(server_fd, 100);
-  if (status == -1)
-  {
-    std::cerr << "Error: cannot listen on socket" << std::endl;
-    std::cerr << "  (" << hostname << "," << port << ")" << std::endl;
-    exit(EXIT_FAILURE);
-  }
-  //END_REF
-  return host_info_list;
-}
 
 //close socket connection
-void Server::close_connect(int webserver_fd, struct addrinfo *host_info_list)
-{
+void Server::close_connect(int webserver_fd,struct addrinfo*host_info_list){
   freeaddrinfo(host_info_list);
   close(webserver_fd);
 }
 
-int recv_end(std::vector<char> &buffer, size_t recv_size)
-{
-  try
-  {
+
+
+
+int recv_end(std::vector <char>& buffer, size_t recv_size){
+  try{
     std::string len;
     std::string xml(buffer.data());
     std::stringstream ss(xml);
-    ss >> len;
-    if (recv_size == std::stoi(len) + len.length() + 1)
-    {
+    ss>>len;
+    if (recv_size == std::stoi(len) + len.length() + 1){
       //receive end
       return 1;
     }
-  }
-  catch (std::exception &e)
-  {
+  }catch(std::exception& e){
     std::cerr << e.what() << std::endl;
     return -1;
   }
@@ -125,137 +126,123 @@ int recv_end(std::vector<char> &buffer, size_t recv_size)
 }
 //receive request
 
-void Server::receiveRequest(int client_fd, std::vector<char> &buffer)
-{
-  size_t receive_length = 0;
-  std::cout << "buffer size is " << buffer.size() << std::endl;
-  try
-  {
-    while (1)
-    {
-      size_t recvbyte = recv(client_fd, &buffer.data()[receive_length], BUFFER_SIZE, 0);
-      if (recvbyte == -1)
-      {
+void Server::receiveRequest(int client_fd, std::vector <char>& buffer){
+  size_t receive_length=0;
+  std::cout<<"buffer size is "<<buffer.size()<<std::endl;
+  try{
+    while(1){
+      size_t recvbyte = recv(client_fd,  &buffer.data()[receive_length],BUFFER_SIZE,0);
+      if((int)recvbyte==-1){
 
-        perror("first receive error");
+	perror("first receive error");
       }
-      receive_length = receive_length + recvbyte;
-      if (recvbyte == 0)
-      {
-        break;
+      receive_length=receive_length+recvbyte;
+      if((int)recvbyte==0){
+	break;
       }
-      if (recv_end(buffer, receive_length) == 1)
-      {
-        //receive end;
-        break;
+      if(recv_end(buffer, receive_length)==1){
+	//receive end;
+	break;
+      }else if (recv_end(buffer, receive_length)== 0){
+	//need to resize
+	if(receive_length == buffer.size()){
+	  buffer.resize(receive_length+BUFFER_SIZE, 0);
+	}
       }
-      else if (recv_end(buffer, receive_length) == 0)
-      {
-        //need to resize
-        if (receive_length == buffer.size())
-        {
-          buffer.resize(receive_length + BUFFER_SIZE, 0);
-        }
-      }
+
     }
+
   }
-  catch (std::bad_alloc &exception)
-  {
-    std::cerr << "bad_alloc exception" << std::endl;
+  catch(std::bad_alloc& exception){
+    std::cerr<<"bad_alloc exception"<<std::endl;
   }
-  std::cout << "Received: " << std::endl;
-  std::cout << buffer[0] << buffer[1] << buffer[2] << std::endl;
+  std::cout<<"Received: "<<std::endl;
+  std::cout<<buffer[0]<<buffer[1]<<buffer[2]<<std::endl;
 }
 
-void helper(int client_fd, Server server, std::vector<char> &buffer)
-{
+void helper(int client_fd, Server server, std::vector <char>& buffer){
 
-  try
-  {
+  try{
     server.receiveRequest(client_fd, buffer);
   }
-  catch (std::exception &e)
-  {
+  catch(std::exception &e){
     return;
   }
 }
 
-void init_db()
-{
-  std::string sql;
 
-  try
-  {
-    connection C("dbname=hw4database user=userhw4 password=000000");
-    if (C.is_open())
-    {
-      cout << "Opened database successfully: " << C.dbname() << endl;
-    }
-    else
-    {
-      cout << "Can't open database" << endl;
-      return;
-    }
-    /* Create SQL statement */
-    sql = "CREATE TABLE account(account_id serial PRIMARY KEY, balance INT, SYM1 CHAR(50) );";
 
-    /* Create a transactional object. */
-    work W(C);
 
-    /* Execute SQL query */
-    W.exec(sql);
-    W.commit();
-    cout << "Table created successfully" << endl;
-    C.disconnect();
-  }
-  catch (const std::exception &e)
-  {
-    cerr << e.what() << std::endl;
-    return;
-  }
+void init_db(){
+std::string sql;
 
-  return;
+try{
+connection C("dbname=hw4database user=userhw4 password=000000");
+if (C.is_open()) {
+cout << "Opened database successfully: " << C.dbname() << endl;
+} else {
+cout << "Can't open database" << endl;
+return;
+}
+/* Create SQL statement */
+sql = "CREATE TABLE account(account_id serial PRIMARY KEY, balance INT, SYM1 CHAR(50) );";
+				      
+
+/* Create a transactional object. */
+work W(C);
+
+/* Execute SQL query */
+W.exec( sql );
+W.commit();
+cout << "Table created successfully" << endl;
+C.disconnect ();
+} catch (const std::exception &e){
+cerr << e.what() << std::endl;
+return;
 }
 
-int main()
-{
+return;
+
+}
+
+
+
+
+
+
+
+
+int main(){
+
 
   init_db();
   Server server;
-  struct addrinfo *addrinfo = server.connect_socket();
+  struct addrinfo * addrinfo = server.connect_socket();
   size_t server_fd = server.server_fd;
-  int thread_id = 0;
+  //  int thread_id = 0;
 
-  while (1)
-  {
-    try
-    {
+
+  while(1){
+    try{
       struct sockaddr_in client_addr;
       socklen_t addr_len = sizeof(client_addr);
-      int client_fd = accept(server_fd, (struct sockaddr *)&client_addr, &addr_len);
+      int client_fd = accept(server_fd,(struct sockaddr*)&client_addr, &addr_len);
 
-      if (client_fd == -1)
-      {
-        perror("Cannot accept connection");
-        continue;
+      if (client_fd == -1) {
+	perror("Cannot accept connection");
+	continue;
       }
-      std::vector<char> buffer(1000);
-      //      std::thread th(helper,client_fd, server, &buffer);
-      //th.detach();
-      server.receiveRequest(client_fd, buffer);
-      //char buffer1[512];
-      // if(recv(client_fd,buffer1, 4, 0 )==-1){
-      //	perror("receive error occur");
-      // }
-      // std::cout<<"Received: "<<std::endl;
-      //std::cout<<buffer1[0]<<std::endl;
-    }
-    catch (std::exception &e)
-    {
+      std::vector <char> buffer(1000);
+      std::thread th(helper,client_fd, server, std::ref(buffer));
+      th.detach();
+            //server.receiveRequest(client_fd, buffer);
+
+    }catch(std::exception& e){
       std::cerr << "In main error: " << e.what() << std::endl;
     }
   }
 
   server.close_connect(server_fd, addrinfo);
   return EXIT_SUCCESS;
+
 }
