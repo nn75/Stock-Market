@@ -1,8 +1,9 @@
 #include <pqxx/pqxx>
 #include <iostream>
+#include <string>
 using namespace std;
 using namespace pqxx;
-std::vector<int> id_set;
+std::vector<string> id_set;
 std::vector<string> symbol_set;
 
 
@@ -12,8 +13,9 @@ class DBOperator{
  public:
   void init_db();
   void insert_attribute(string name);
-  void insert(string name, int value);
-  bool checkId(int id);
+  void insert_account(string id, string balance);
+  void insert_sym(string id, string sym, string value);
+  bool checkId(string id);
   bool checkSymbol(string name);
 };
 
@@ -98,15 +100,15 @@ bool DBOperator::checkSymbol(string name){
   return exist;
 
 }
-bool DBOperator::checkId(int id){
+bool DBOperator::checkId(string id){
 
 
   bool exist = false;
-  vector<int>::iterator it = id_set.begin();
+  vector<string>::iterator it = id_set.begin();
   while(it != id_set.end()){
 
 
-    if((*it)==id){
+    if((*it).compare(id)==0){
       exist = true;
     }
     ++it;
@@ -117,14 +119,14 @@ bool DBOperator::checkId(int id){
 }
 
 
-void DBOperator::insert(string attribute, int value){
+void DBOperator::insert_account(string id, string balance){
   try{
 
-    if(attribute.compare("account_id")){
+   
 
-      id_set.push_back(value);
+      id_set.push_back(id);
 
-    }
+   
 
     
     connection C("dbname=hw4database user=userhw4 password=000000");
@@ -135,7 +137,7 @@ void DBOperator::insert(string attribute, int value){
       return;
     }
     /* Create SQL statement */
-    std::string sql = "INSERT INTO account( " +attribute +") VALUES ( '"+std::to_string(value)+"' ) ;";
+    std::string sql = "INSERT INTO account(account_id, balance) VALUES ( '"+id+"', '"+balance+"' );";
     work W(C);
 
     W.exec( sql );
@@ -149,5 +151,37 @@ void DBOperator::insert(string attribute, int value){
 
   return;
   
+
+}
+
+
+
+
+void DBOperator::insert_sym(string id, string sym, string value){
+  try{
+
+   
+    connection C("dbname=hw4database user=userhw4 password=000000");
+    if (C.is_open()) {
+      //      cout << "Opened database successfully: " << C.dbname() << endl;
+    } else {
+      cout << "Can't open database" << endl;
+      return;
+    }
+    /* Create SQL statement */
+    std::string sql = "UPDATE account SET "+sym+" = '"+value+"' WHERE account_id = '"+id+"' ;";
+    work W(C);
+
+    W.exec( sql );
+    W.commit();
+    // cout << "Table created successfully" << endl;
+    C.disconnect ();
+  } catch (const std::exception &e){
+    cerr << e.what() << std::endl;
+    return;
+  }
+
+  return;
+
 
 }
